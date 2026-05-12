@@ -52,6 +52,10 @@ Migration/
 ## Paso 0 — Setup inicial (una sola vez)
 
 ```powershell
+# Clonar el repositorio
+git clone https://github.com/benjaobrecht/Migration-Data.git
+cd Migration-Data
+
 # Crear y activar entorno virtual
 python -m venv .venv
 .venv\Scripts\activate
