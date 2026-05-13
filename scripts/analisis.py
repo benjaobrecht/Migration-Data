@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 import duckdb
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import OUTPUT_DIR, LOGS_DIR, SOURCES
@@ -89,7 +90,27 @@ def main():
         ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
         out = OUTPUT_DIR / f"resultado_{ts}.xlsx"
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        df.to_excel(out, index=False)
+
+        if "periodo" in df.columns:
+            resumen = (
+                df.groupby(["periodo"] + (["brecha"] if "brecha" in df.columns else []))
+                .size()
+                .reset_index(name="cantidad")
+            )
+            with pd.ExcelWriter(out, engine="openpyxl") as writer:
+                resumen.to_excel(writer, sheet_name="resumen", index=False)
+                log.info(f"  Sheet 'resumen': {len(resumen):,} filas")
+                for periodo, grupo in df.groupby("periodo"):
+                    grupo.drop(columns="periodo").to_excel(writer, sheet_name=str(periodo)[:31], index=False)
+                    log.info(f"  Sheet '{periodo}': {len(grupo):,} filas")
+        elif "brecha" in df.columns:
+            with pd.ExcelWriter(out, engine="openpyxl") as writer:
+                for valor, grupo in df.groupby("brecha"):
+                    grupo.drop(columns="brecha").to_excel(writer, sheet_name=str(valor)[:31], index=False)
+                    log.info(f"  Sheet '{valor}': {len(grupo):,} filas")
+        else:
+            df.to_excel(out, index=False)
+
         log.info(f"Resultado: {len(df):,} filas → {out.name}")
         print(df.to_string(max_rows=20))
         return
