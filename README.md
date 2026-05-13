@@ -27,6 +27,11 @@ Migration/
 │   ├── ingest.py              ← USO MANUAL: carga xlsx → upsert en parquet particionado
 │   ├── reconciliacion.py      ← USO MANUAL: cruza temusystem vs proforma, detecta brechas
 │   └── analisis.py            ← OPCIONAL: consultas DuckDB libres (SQL ad-hoc)
+├── queries/                   ← consultas SQL listas para usar con analisis.py
+│   ├── conteo_por_fuente.sql
+│   ├── registros_por_mes_temusystem.sql
+│   ├── registros_por_mes_proforma.sql
+│   └── cruce_temusystem_proforma.sql
 ├── data/                      ← generado localmente, NO versionado
 │   ├── temusystem/
 │   │   ├── year=2026/month=01/data.parquet
@@ -34,7 +39,7 @@ Migration/
 │   │   └── master.parquet     ← todo el histórico junto, sin duplicados
 │   ├── proforma/
 │   │   └── master.parquet
-│   └── raw/                   ← xlsx originales archivados automáticamente
+│   └── raw/                   ← xlsx originales archivados automáticamente (con timestamp)
 ├── input/                     ← xlsx de entrada (no versionado)
 ├── output/                    ← reportes Excel generados
 └── logs/                      ← log de cada ejecución
@@ -182,18 +187,6 @@ python scripts/analisis.py
 duckdb> SELECT COUNT(*) FROM temusystem;
 duckdb> SELECT COUNT(*) FROM proforma;
 
--- Registros por mes
-duckdb> SELECT YEAR(FECHA) año, MONTH(FECHA) mes, COUNT(*) n
-        FROM proforma GROUP BY 1, 2 ORDER BY 1, 2;
-
--- Buscar una orden específica en las dos bases
-duckdb> SELECT * FROM temusystem WHERE "Tracking number" = 'ABC123';
-duckdb> SELECT * FROM proforma WHERE "NROGUIA" = 'ABC123';
-
--- Órdenes que están en ambas bases
-duckdb> SELECT t."Tracking number", t."Settlement month(eg:202305)", p."FECHA"
-        FROM temusystem t
-        JOIN proforma p ON t."Tracking number" = p."NROGUIA";
 ```
 
 ### Query directa desde terminal
@@ -204,29 +197,23 @@ python scripts/analisis.py --query "SELECT COUNT(DISTINCT \"Tracking number\") F
 
 ### Desde un archivo `.sql`
 
-Creás un archivo con tu consulta, por ejemplo `mi_consulta.sql`:
+La carpeta `queries/` contiene consultas listas para usar. Cada archivo tiene una consulta:
 
-```sql
-SELECT
-    t."Tracking number",
-    t."Settlement month(eg:202305)" AS mes_temu,
-    p."FECHA"                        AS fecha_proforma
-FROM temusystem t
-JOIN proforma p ON t."Tracking number" = p."NROGUIA"
-WHERE YEAR(p."FECHA") = 2026
-```
+| Archivo | Qué hace |
+|---|---|
+| `conteo_por_fuente.sql` | Cuántos registros hay en cada tabla |
+| `registros_por_mes_temusystem.sql` | Desglose por año/mes de temusystem |
+| `registros_por_mes_proforma.sql` | Desglose por año/mes de proforma |
+| `cruce_temusystem_proforma.sql` | Órdenes que están en ambas bases |
 
 ```powershell
-python scripts/analisis.py --sql mi_consulta.sql
-# → guarda el resultado en output/ como Excel automáticamente
+python scripts/analisis.py --sql queries/conteo_por_fuente.sql
+python scripts/analisis.py --sql queries/cruce_temusystem_proforma.sql
 ```
 
-### Exportar todos los análisis predefinidos
+El resultado se muestra en la terminal (hasta 20 filas) y se guarda automáticamente en `output/` como Excel.
 
-```powershell
-python scripts/analisis.py --export reporte_mayo_2026
-# → genera output/reporte_mayo_2026_TIMESTAMP.xlsx con varios sheets
-```
+Para agregar una consulta nueva, creás un archivo `.sql` en `queries/` y lo llamás igual que los anteriores.
 
 ---
 
