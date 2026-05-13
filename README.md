@@ -58,7 +58,8 @@ cd Migration-Data
 
 # Crear y activar entorno virtual
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate # Este comando es para activar el entorno virtual, cada vez que se abra una terminal nueva hay que activar el entorno
+
 
 # Instalar dependencias
 pip install -r requirements.txt
