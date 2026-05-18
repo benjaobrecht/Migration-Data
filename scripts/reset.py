@@ -19,12 +19,24 @@ Uso:
     python scripts/reset.py
 """
 
+import os
+import stat
 import sys
 import shutil
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import DATA_DIR, RAW_DIR, OUTPUT_DIR, LOGS_DIR, SOURCES
+
+def _limpiar_carpeta(carpeta: Path) -> None:
+    """Borra el contenido de una carpeta sin borrar la carpeta en sí."""
+    for item in carpeta.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item, onexc=lambda f, p, _: (os.chmod(p, stat.S_IWRITE), f(p)))
+        else:
+            os.chmod(item, stat.S_IWRITE)
+            item.unlink()
+
 
 CARPETAS_A_BORRAR = [
     *[cfg["parquet_dir"] for cfg in SOURCES.values()],
@@ -48,7 +60,7 @@ def main():
     print("NO se tocara: input/, config.py, scripts/")
     print()
 
-    confirmacion = input("Escribi RESET para confirmar: ").strip()
+    confirmacion = input("Escribe RESET para confirmar: ").strip()
     if confirmacion != "RESET":
         print("\nReset cancelado.")
         return
@@ -56,8 +68,7 @@ def main():
     print()
     for carpeta in CARPETAS_A_BORRAR:
         if carpeta.exists():
-            shutil.rmtree(carpeta)
-            carpeta.mkdir(parents=True)
+            _limpiar_carpeta(carpeta)
             print(f"  Limpiado: {carpeta.relative_to(carpeta.parent.parent)}")
         else:
             print(f"  Ya vacia: {carpeta.relative_to(carpeta.parent.parent)}")

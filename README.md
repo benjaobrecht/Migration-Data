@@ -25,13 +25,15 @@ Migration/
 ├── requirements.txt
 ├── scripts/
 │   ├── ingest.py              ← USO MANUAL: carga xlsx → upsert en parquet particionado
-│   ├── reconciliacion.py      ← USO MANUAL: cruza temusystem vs proforma, detecta brechas
+│   ├── reconciliacion.py      ← cruza temusystem vs proforma sin filtro de Expense Difference
+│   ├── reconciliacion_2.py    ← USO MANUAL: cruza considerando solo registros con diferencia real
+│   ├── reset.py               ← borra todos los datos generados y deja el proyecto limpio
 │   └── analisis.py            ← OPCIONAL: consultas DuckDB libres (SQL ad-hoc)
 ├── queries/                   ← consultas SQL listas para usar con analisis.py
-│   ├── conteo_por_fuente.sql
-│   ├── registros_por_mes_temusystem.sql
-│   ├── registros_por_mes_proforma.sql
-│   └── cruce_temusystem_proforma.sql
+│   ├── Cruce_Cantidades.sql
+│   ├── expense_difference_por_mes.sql
+│   ├── reconciliacion_temu_sin_proforma.sql
+│   └── reconciliacion_proforma_sin_temu.sql
 ├── data/                      ← generado localmente, NO versionado
 │   ├── temusystem/
 │   │   ├── year=2026/month=01/data.parquet
@@ -146,15 +148,17 @@ python scripts/ingest.py "input/temusystem march_actualizacion.xlsx"
 
 Detecta qué órdenes de servicio están en una base pero no en la otra.
 
+Se recomienda usar `reconciliacion_2.py`, que aplica el filtro correcto de `Expense Difference` antes de hacer los cruces:
+
 ```powershell
 # Revisar todo el histórico completo (recomendado)
-python scripts/reconciliacion.py
+python scripts/reconciliacion_2.py
 
 # Solo el año 2026
-python scripts/reconciliacion.py --year 2026
+python scripts/reconciliacion_2.py --year 2026
 
 # Solo marzo 2026
-python scripts/reconciliacion.py --year 2026 --month 3
+python scripts/reconciliacion_2.py --year 2026 --month 3
 ```
 
 ### ¿Qué produce?
@@ -163,13 +167,18 @@ Un archivo Excel en `output/` con tres sheets:
 
 | Sheet | Contenido |
 |---|---|
-| `en_temu_sin_proforma` | Órdenes que están en temusystem pero no en proforma (con todas sus columnas) |
-| `en_proforma_sin_temu` | Órdenes que están en proforma pero no en temusystem (con todas sus columnas) |
+| `en_temu_sin_proforma` | Órdenes con `Expense Difference` real (excluye `No Difference`) que no están en proforma |
+| `en_proforma_sin_temu` | Órdenes de proforma que no tienen ningún match en temusystem |
 | `resumen` | Conteo de brechas agrupado por mes |
 
-### Lógica del cruce entre meses
+### Lógica del cruce
 
-Cuando se busca si una orden de marzo de temusystem existe en proforma, se busca en **todos los meses de proforma**, no solo en marzo. Así una orden cargada en temusystem en marzo pero registrada en proforma en enero aparece como "encontrada" y no como brecha.
+| Dirección | Universo de temusystem usado |
+|---|---|
+| `en_temu_sin_proforma` | Solo registros con `Expense Difference` ≠ `No Difference` |
+| `en_proforma_sin_temu` | Toda la tabla (incluye `No Difference`) |
+
+El cruce entre meses busca en **todo el histórico** de la base contraria, no solo en el mes equivalente. Una orden de marzo en temusystem que aparece en proforma en enero se considera encontrada.
 
 ---
 
@@ -201,14 +210,15 @@ La carpeta `queries/` contiene consultas listas para usar. Cada archivo tiene un
 
 | Archivo | Qué hace |
 |---|---|
-| `conteo_por_fuente.sql` | Cuántos registros hay en cada tabla |
-| `registros_por_mes_temusystem.sql` | Desglose por año/mes de temusystem |
-| `registros_por_mes_proforma.sql` | Desglose por año/mes de proforma |
-| `cruce_temusystem_proforma.sql` | Órdenes que están en ambas bases |
+| `Cruce_Cantidades.sql` | Conteo de brechas por mes en ambas direcciones (sin filtro de Expense Difference) |
+| `expense_difference_por_mes.sql` | Distribución de valores de `Expense Difference` para un mes dado |
+| `reconciliacion_temu_sin_proforma.sql` | Detalle de órdenes con diferencia real en temusystem que no están en proforma |
+| `reconciliacion_proforma_sin_temu.sql` | Detalle de órdenes de proforma que no tienen match en temusystem |
 
 ```powershell
-python scripts/analisis.py --sql queries/conteo_por_fuente.sql
-python scripts/analisis.py --sql queries/cruce_temusystem_proforma.sql
+python scripts/analisis.py --sql queries/Cruce_Cantidades.sql
+python scripts/analisis.py --sql queries/reconciliacion_temu_sin_proforma.sql
+python scripts/analisis.py --sql queries/reconciliacion_proforma_sin_temu.sql
 ```
 
 El resultado se muestra en la terminal (hasta 20 filas) y se guarda automáticamente en `output/` como Excel.
@@ -241,7 +251,7 @@ Cada mes:
 2. python scripts/ingest.py
    └─ actualiza particiones y master.parquet
 
-3. python scripts/reconciliacion.py --year 2026 --month X
+3. python scripts/reconciliacion_2.py --year 2026 --month X
    └─ Excel con brechas del mes en output/
 
 4. (opcional) python scripts/analisis.py
