@@ -25,10 +25,8 @@ Migration/
 ├── requirements.txt
 ├── scripts/
 │   ├── ingest.py              ← USO MANUAL: carga xlsx → upsert en parquet particionado
-│   ├── reconciliacion.py      ← cruza temusystem vs proforma sin filtro de Expense Difference
-│   ├── reconciliacion_2.py    ← USO MANUAL: cruza considerando solo registros con diferencia real
 │   ├── reset.py               ← borra todos los datos generados y deja el proyecto limpio
-│   └── analisis.py            ← OPCIONAL: consultas DuckDB libres (SQL ad-hoc)
+│   └── analisis.py            ← motor de consultas: corre queries SQL y exporta Excel
 ├── queries/                   ← consultas SQL listas para usar con analisis.py
 │   ├── Cruce_Cantidades.sql
 │   ├── expense_difference_por_mes.sql
@@ -65,8 +63,7 @@ cd Migration-Data
 
 # Crear y activar entorno virtual
 python -m venv .venv
-.venv\Scripts\activate # Este comando es para activar el entorno virtual, cada vez que se abra una terminal nueva hay que activar el entorno
-
+.venv\Scripts\activate # Este comando es para activar el entorno virtual, cada vez que se abra una terminal nueva hay que activar el entorno.
 
 # Instalar dependencias
 pip install -r requirements.txt
@@ -144,47 +141,32 @@ python scripts/ingest.py "input/temusystem march_actualizacion.xlsx"
 
 ---
 
-## Paso 2 — Reconciliación (análisis principal)
+## Paso 2 — Reconciliación y análisis con queries
 
-Detecta qué órdenes de servicio están en una base pero no en la otra.
-
-Se recomienda usar `reconciliacion_2.py`, que aplica el filtro correcto de `Expense Difference` antes de hacer los cruces:
+Toda la lógica de análisis vive en archivos `.sql` dentro de `queries/`. Se ejecutan con `analisis.py`, que corre la query y guarda el resultado como Excel en `output/` con el mismo nombre que el archivo SQL.
 
 ```powershell
-# Revisar todo el histórico completo (recomendado)
-python scripts/reconciliacion_2.py
-
-# Solo el año 2026
-python scripts/reconciliacion_2.py --year 2026
-
-# Solo marzo 2026
-python scripts/reconciliacion_2.py --year 2026 --month 3
+python scripts/analisis.py --sql queries/reconciliacion_temu_sin_proforma.sql
+python scripts/analisis.py --sql queries/reconciliacion_proforma_sin_temu.sql
+python scripts/analisis.py --sql queries/Cruce_Cantidades.sql
 ```
 
-### ¿Qué produce?
-
-Un archivo Excel en `output/` con tres sheets:
-
-| Sheet | Contenido |
+| Archivo | Qué produce |
 |---|---|
-| `en_temu_sin_proforma` | Órdenes con `Expense Difference` real (excluye `No Difference`) que no están en proforma |
-| `en_proforma_sin_temu` | Órdenes de proforma que no tienen ningún match en temusystem |
-| `resumen` | Conteo de brechas agrupado por mes |
+| `reconciliacion_temu_sin_proforma.sql` | Órdenes con diferencia real en temusystem que no están en proforma |
+| `reconciliacion_proforma_sin_temu.sql` | Órdenes de proforma sin match en temusystem |
+| `Cruce_Cantidades.sql` | Conteo de brechas por mes en ambas direcciones |
+| `expense_difference_por_mes.sql` | Distribución de `Expense Difference` para un mes dado |
 
-### Lógica del cruce
+El resultado se muestra en la terminal (hasta 20 filas) y se guarda automáticamente como `output/<nombre_query>_<timestamp>.xlsx`.
 
-| Dirección | Universo de temusystem usado |
-|---|---|
-| `en_temu_sin_proforma` | Solo registros con `Expense Difference` ≠ `No Difference` |
-| `en_proforma_sin_temu` | Toda la tabla (incluye `No Difference`) |
+Para agregar un análisis nuevo, alcanza con crear un archivo `.sql` en `queries/` y correrlo igual que los anteriores.
 
-El cruce entre meses busca en **todo el histórico** de la base contraria, no solo en el mes equivalente. Una orden de marzo en temusystem que aparece en proforma en enero se considera encontrada.
+### Lógica de los cruces de reconciliación
 
----
-
-## Paso 3 — Análisis libre con DuckDB
-
-Para consultas personalizadas sobre el histórico completo.
+- `reconciliacion_temu_sin_proforma.sql` excluye filas con `Expense Difference = 'No Difference'` antes de cruzar.
+- `reconciliacion_proforma_sin_temu.sql` compara contra **todo** el histórico de temusystem (incluyendo `No Difference`): si la guía existe en temu con cualquier valor, no es una brecha.
+- El cruce busca en todo el histórico de la base contraria, no solo en el mes equivalente.
 
 ### Modo interactivo
 
@@ -197,33 +179,13 @@ duckdb> SELECT COUNT(*) FROM temusystem;
 duckdb> SELECT COUNT(*) FROM proforma;
 
 ```
-
-### Query directa desde terminal
-
-```powershell
-python scripts/analisis.py --query "SELECT COUNT(DISTINCT \"Tracking number\") FROM temusystem"
-```
-
 ### Desde un archivo `.sql`
-
-La carpeta `queries/` contiene consultas listas para usar. Cada archivo tiene una consulta:
-
-| Archivo | Qué hace |
-|---|---|
-| `Cruce_Cantidades.sql` | Conteo de brechas por mes en ambas direcciones (sin filtro de Expense Difference) |
-| `expense_difference_por_mes.sql` | Distribución de valores de `Expense Difference` para un mes dado |
-| `reconciliacion_temu_sin_proforma.sql` | Detalle de órdenes con diferencia real en temusystem que no están en proforma |
-| `reconciliacion_proforma_sin_temu.sql` | Detalle de órdenes de proforma que no tienen match en temusystem |
 
 ```powershell
 python scripts/analisis.py --sql queries/Cruce_Cantidades.sql
-python scripts/analisis.py --sql queries/reconciliacion_temu_sin_proforma.sql
-python scripts/analisis.py --sql queries/reconciliacion_proforma_sin_temu.sql
 ```
 
-El resultado se muestra en la terminal (hasta 20 filas) y se guarda automáticamente en `output/` como Excel.
-
-Para agregar una consulta nueva, creás un archivo `.sql` en `queries/` y lo llamás igual que los anteriores.
+El resultado se muestra en la terminal y se guarda en `output/<nombre_query>_<timestamp>.xlsx`.
 
 ---
 
@@ -251,9 +213,11 @@ Cada mes:
 2. python scripts/ingest.py
    └─ actualiza particiones y master.parquet
 
-3. python scripts/reconciliacion_2.py --year 2026 --month X
-   └─ Excel con brechas del mes en output/
+3. python scripts/analisis.py --sql queries/reconciliacion_temu_sin_proforma.sql
+   python scripts/analisis.py --sql queries/reconciliacion_proforma_sin_temu.sql
+   python scripts/analisis.py --sql queries/Cruce_Cantidades.sql
+   └─ un Excel por query en output/
 
 4. (opcional) python scripts/analisis.py
-   └─ consultas SQL ad-hoc sobre todo el histórico
+   └─ modo interactivo para consultas SQL ad-hoc
 ```

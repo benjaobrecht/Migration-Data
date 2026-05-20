@@ -21,6 +21,9 @@ __pycache__/
 .idea/
 *.code-workspace
 
+# Claude Code
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db

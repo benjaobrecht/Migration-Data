@@ -6,7 +6,6 @@ Lee las particiones directamente en disco sin cargar todo en memoria.
 
 Uso:
     python scripts/analisis.py                          # modo interactivo
-    python scripts/analisis.py --query "SELECT ..."     # query directa
     python scripts/analisis.py --sql queries/mi.sql     # archivo SQL
 
 Tablas disponibles en DuckDB:
@@ -77,7 +76,6 @@ def crear_conexion() -> duckdb.DuckDBPyConnection:
 
 def main():
     parser = argparse.ArgumentParser(description="Análisis DuckDB sobre consolidados parquet")
-    parser.add_argument("--query", type=str,  help="Query SQL directa")
     parser.add_argument("--sql",   type=Path, help="Archivo .sql a ejecutar (ej: queries/conteo_por_fuente.sql)")
     args = parser.parse_args()
 
@@ -88,7 +86,7 @@ def main():
         sql = args.sql.read_text(encoding="utf-8")
         df  = con.execute(sql).df()
         ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out = OUTPUT_DIR / f"resultado_{ts}.xlsx"
+        out = OUTPUT_DIR / f"{args.sql.stem}_{ts}.xlsx"
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
         if "periodo" in df.columns:
@@ -113,17 +111,6 @@ def main():
 
         log.info(f"Resultado: {len(df):,} filas → {out.name}")
         print(df.to_string(max_rows=20))
-        return
-
-    # ── Query directa ──
-    if args.query:
-        df  = con.execute(args.query).df()
-        ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out = OUTPUT_DIR / f"resultado_{ts}.xlsx"
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        df.to_excel(out, index=False)
-        print(df.to_string(max_rows=50))
-        print(f"\n[{len(df):,} filas] → guardado en {out.name}")
         return
 
     # ── Modo interactivo ──
