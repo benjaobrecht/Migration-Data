@@ -18,6 +18,7 @@ from pathlib import Path
 
 warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
 
+import duckdb
 import pandas as pd
 import pyarrow.parquet as pq
 
@@ -52,7 +53,7 @@ def detect_source(path: Path) -> dict | None:
 
 def load_xlsx(path: Path, sheet) -> pd.DataFrame:
     log.info(f"Leyendo {path.name} …")
-    df = pd.read_excel(path, sheet_name=sheet, dtype_backend="numpy_nullable")
+    df = pd.read_excel(path, sheet_name=sheet, dtype_backend="numpy_nullable", engine="calamine")
     log.info(f"  → {len(df):,} filas | {df.shape[1]} columnas")
     return df
 
@@ -139,15 +140,28 @@ def rebuild_master(source: dict):
         log.warning(f"  Sin particiones para {source['name']}, master omitido")
         return
 
-    pk = source["primary_key"]
-    dfs = [pd.read_parquet(p) for p in parts]
-    master = (
-        pd.concat(dfs, ignore_index=True)
-        .drop_duplicates(subset=pk, keep="last")
-        .reset_index(drop=True)
-    )
-    master.to_parquet(master_path, compression=PARQUET_COMPRESSION, index=False)
-    log.info(f"  Master '{source['name']}': {len(master):,} filas → {master_path.name}")
+    pk_quoted    = ", ".join(f'"{c}"' for c in source["primary_key"])
+    glob_pattern = str(parquet_dir / "**" / "data.parquet").replace("\\", "/")
+    master_str   = str(master_path).replace("\\", "/")
+
+    con = duckdb.connect()
+    con.execute(f"""
+        COPY (
+            SELECT * EXCLUDE (rn, filename)
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY {pk_quoted}
+                           ORDER BY filename DESC
+                       ) AS rn
+                FROM read_parquet('{glob_pattern}', filename=true)
+            )
+            WHERE rn = 1
+        ) TO '{master_str}' (FORMAT PARQUET, COMPRESSION '{PARQUET_COMPRESSION}')
+    """)
+    count = con.execute(f"SELECT COUNT(*) FROM read_parquet('{master_str}')").fetchone()[0]
+    log.info(f"  Master '{source['name']}': {count:,} filas → {master_path.name}")
+    con.close()
 
 
 # ── Archivo raw ────────────────────────────────────────────────────────────────
