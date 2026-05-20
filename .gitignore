@@ -5,8 +5,10 @@ env/
 
 # Datos (no versionar archivos pesados)
 data/
-input/
-output/
+input/*
+!input/.gitkeep
+output/*
+!output/.gitkeep
 logs/
 
 # Python

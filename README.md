@@ -40,10 +40,14 @@ Migration/
 │   ├── proforma/
 │   │   └── master.parquet
 │   └── raw/                   ← xlsx originales archivados automáticamente (con timestamp)
-├── input/                     ← xlsx de entrada (no versionado)
-├── output/                    ← reportes Excel generados
+├── input/                     ← acá van los xlsx de entrada
+│   └── .gitkeep               ← archivo técnico
+├── output/                    ← acá aparecen los reportes Excel generados
+│   └── .gitkeep               ← archivo técnico
 └── logs/                      ← log de cada ejecución
 ```
+
+> **Nota sobre los archivos `.gitkeep`:** Son archivos vacíos que solo existen para que las carpetas `input/` y `output/` estén disponibles al clonar el repositorio. No tienen ningún efecto sobre el funcionamiento de la herramienta — si lo desean, pueden borrarlos sin problema.
 
 ---
 
@@ -67,6 +71,9 @@ python -m venv .venv
 
 # Instalar dependencias
 pip install -r requirements.txt
+
+# Verificar que todo quedó instalado correctamente
+pip list
 ```
 
 ### Configuración en `config.py`
