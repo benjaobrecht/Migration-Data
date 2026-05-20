@@ -168,7 +168,9 @@ Para agregar un análisis nuevo, alcanza con crear un archivo `.sql` en `queries
 - `reconciliacion_proforma_sin_temu.sql` compara contra **todo** el histórico de temusystem (incluyendo `No Difference`): si la guía existe en temu con cualquier valor, no es una brecha.
 - El cruce busca en todo el histórico de la base contraria, no solo en el mes equivalente.
 
-### Modo interactivo
+### El script analisis.py tiene dos formas de usarse:
+
+### 1. Modo interactivo
 
 ```powershell
 python scripts/analisis.py
@@ -179,7 +181,7 @@ duckdb> SELECT COUNT(*) FROM temusystem;
 duckdb> SELECT COUNT(*) FROM proforma;
 
 ```
-### Desde un archivo `.sql`
+### 2. Desde un archivo `.sql`
 
 ```powershell
 python scripts/analisis.py --sql queries/Cruce_Cantidades.sql
@@ -197,7 +199,7 @@ Si necesitás borrar todos los datos generados y empezar de cero (útil al cambi
 python scripts/reset.py
 ```
 
-Borra `data/`, `output/` y `logs/`. **No toca** `input/`, `config.py` ni `scripts/`.
+Borra `data/`, `output/` y `logs/`. **No toca** `input/`, `config.py`, `scripts/` ni `queries/`.
 Pide confirmación escribiendo `RESET` antes de borrar nada.
 
 ---
