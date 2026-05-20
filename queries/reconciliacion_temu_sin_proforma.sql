@@ -1,5 +1,4 @@
-SELECT *
-FROM temusystem
+SELECT * FROM temusystem
 WHERE ("Expense Difference" <> 'No Difference' OR "Expense Difference" IS NULL)
   AND NOT EXISTS (
       SELECT 1 FROM proforma p
