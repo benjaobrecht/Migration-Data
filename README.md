@@ -47,7 +47,7 @@ Migration/
 └── logs/                      ← log de cada ejecución
 ```
 
-> **Nota sobre los archivos `.gitkeep`:** Son archivos vacíos que solo existen para que las carpetas `input/` y `output/` estén disponibles al clonar el repositorio. No tienen ningún efecto sobre el funcionamiento de la herramienta — si lo desean, pueden borrarlos sin problema.
+> **Nota sobre los archivos `.gitkeep`:** Son archivos vacíos que solo existen para que las carpetas `input/` y `output/` estén disponibles al clonar el repositorio. No tienen ningún efecto sobre el funcionamiento de la herramienta si lo desean, pueden borrarlos sin problema.
 
 ---
 
